@@ -57,6 +57,7 @@ module Mongo
         :max => :max,
         :min => :min,
         :name => :name,
+        :partial_filter => :partialFilterExpression,
         :partial_filter_expression => :partialFilterExpression,
         :sparse => :sparse,
         :sphere_version => :'2dsphereIndexVersion',
