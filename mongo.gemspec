@@ -45,10 +45,4 @@ Gem::Specification.new do |s|
   else
     s.add_dependency 'bson', '>=4.14.1', '<5.0.0'
   end
-
-  s.add_development_dependency('rubocop', '~> 1.27.0')
-  s.add_development_dependency('rubocop-performance', '~> 1.13.3')
-  s.add_development_dependency('rubocop-rails', '~> 2.14.2')
-  s.add_development_dependency('rubocop-rake', '~> 0.6.0')
-  s.add_development_dependency('rubocop-rspec', '~> 2.9.0')
 end
