@@ -6410,6 +6410,7 @@ Style/Dir:
 # Offense count: 8
 # Configuration parameters: AllowedConstants.
 Style/Documentation:
+  Enabled: false
   Exclude:
     - 'lib/mongo/auth/aws.rb'
     - 'lib/mongo/bulk_write.rb'
