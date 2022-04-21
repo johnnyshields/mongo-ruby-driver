@@ -4342,6 +4342,8 @@ Naming/MemoizedInstanceVariableName:
 # SupportedStyles: snake_case, camelCase
 Naming/MethodName:
   EnforcedStyle: snake_case
+  Exclude:
+    - 'spec/runners/gridfs.rb'
 
 # Offense count: 97
 # Configuration parameters: MinNameLength, AllowNamesEndingInNumbers, AllowedNames, ForbiddenNames.
@@ -4391,6 +4393,7 @@ Naming/PredicateName:
     - 'lib/mongo/operation/shared/idable.rb'
     - 'lib/mongo/options/redacted.rb'
     - 'lib/mongo/server/description.rb'
+    - 'spec/runners/crud/operation.rb'
 
 # Offense count: 28
 # This cop supports safe auto-correction (--auto-correct).
@@ -4773,6 +4776,10 @@ RSpec/BeNil:
 # Offense count: 102
 RSpec/BeforeAfterAll:
   Exclude:
+    - 'spec/spec_helper.rb'
+    - 'spec/support/common_shortcuts.rb'
+    - 'spec/support/constraints.rb'
+    - 'spec/support/shared/app_metadata.rb'
     - 'spec/integration/auth_spec.rb'
     - 'spec/integration/aws_auth_request_spec.rb'
     - 'spec/integration/aws_credentials_retriever_spec.rb'
@@ -8351,6 +8358,7 @@ Style/NumericLiterals:
 # Configuration parameters: EnforcedStyle, IgnoredMethods.
 # SupportedStyles: predicate, comparison
 Style/NumericPredicate:
+  Enabled: false
   Exclude:
     - 'lib/mongo/address/validator.rb'
     - 'lib/mongo/auth/scram_conversation_base.rb'
