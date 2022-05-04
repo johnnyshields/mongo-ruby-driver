@@ -597,7 +597,7 @@ Naming/MemoizedInstanceVariableName:
 # Configuration parameters: IgnoredPatterns.
 # SupportedStyles: snake_case, camelCase
 Naming/MethodName:
-  EnforcedStyle: snake_case
+  Enabled: false
 
 # Offense count: 96
 # Configuration parameters: MinNameLength, AllowNamesEndingInNumbers, AllowedNames, ForbiddenNames.
