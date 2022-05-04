@@ -132,11 +132,11 @@ module Unified
 
           create_client(**opts).tap do |client|
             @observe_sensitive = spec.use('observeSensitiveCommands')
+            subscriber = (@subscribers[client] ||= EventSubscriber.new)
             if oe = spec.use('observeEvents')
               oe.each do |event|
                 case event
                 when 'commandStartedEvent', 'commandSucceededEvent', 'commandFailedEvent'
-                  subscriber = (@subscribers[client] ||= EventSubscriber.new)
                   unless client.send(:monitoring).subscribers[Mongo::Monitoring::COMMAND].include?(subscriber)
                     client.subscribe(Mongo::Monitoring::COMMAND, subscriber)
                   end
@@ -146,7 +146,6 @@ module Unified
                     subscriber.ignore_commands(ignore_events)
                   end
                 when /\A(?:pool|connection)/
-                  subscriber = (@subscribers[client] ||= EventSubscriber.new)
                   unless client.send(:monitoring).subscribers[Mongo::Monitoring::CONNECTION_POOL]&.include?(subscriber)
                     client.subscribe(Mongo::Monitoring::CONNECTION_POOL, subscriber)
                   end
@@ -334,8 +333,10 @@ module Unified
         else
           result = send(method_name, op)
           if expected_result = op.use('expectResult')
-            if result.nil? && !expected_result.empty?
-              raise Error::ResultMismatch, "Actual result nil but expected result #{expected_result}"
+            if result.nil? && expected_result.keys == ["$$unsetOrMatches"]
+              return
+            elsif result.nil? && !expected_result.empty?
+              raise Error::ResultMismatch, "#{msg}: expected #{expected} but got nil"
             elsif Array === expected_result
               assert_documents_match(result, expected_result)
             else
