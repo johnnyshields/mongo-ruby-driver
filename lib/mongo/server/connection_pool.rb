@@ -148,7 +148,16 @@ module Mongo
         # must do so under this lock.
         @lock = Mutex.new
 
-        # Background thread reponsible for maintaining the size of
+        # Mutex used for synchronizing FIFO thread access to the pool.
+        @fifo_lock = Mutex.new
+
+        # Queue to track the order of incoming connection requests.
+        @fifo_queue = Queue.new
+
+        # Condition variable for thread notification
+        @fifo_cv = Mongo::ConditionVariable.new(@fifo_lock)
+
+        # Background thread responsible for maintaining the size of
         # the pool to at least min_size
         @populator = Populator.new(self, options)
         @populate_semaphore = Semaphore.new
@@ -164,7 +173,7 @@ module Mongo
         @connection_requests = 0
 
         # Condition variable to enforce the second check in check_out: max_connecting.
-        # Thei condition variable should be signaled when the number of pending
+        # This condition variable should be signaled when the number of pending
         # connections decreases.
         @max_connecting_cv = Mongo::ConditionVariable.new(@lock)
         @max_connecting = options.fetch(:max_connecting, DEFAULT_MAX_CONNECTING)
@@ -877,6 +886,8 @@ module Mongo
             @pending_connections.delete(connection)
             @max_connecting_cv.signal
             @size_cv.signal
+            cleanup_fifo_queue
+            @fifo_cv.signal
           end
           raise
         end
@@ -1255,7 +1266,18 @@ module Mongo
         connection = nil
 
         @lock.synchronize do
-          # The first gate to checking out a connection. Make sure the number of
+
+          # The first gate to checking out a connection. Ensure that
+          # threads execute in FIFO order.
+          thread_ref = WeakRef.new(Thread.current)
+          @fifo_queue.push(thread_ref)
+          until fifo_ready?(thread_ref)
+            wait = deadline - Utils.monotonic_time
+            raise_check_out_timeout!(connection_global_id) if wait <= 0
+            @fifo_cv.wait(wait)
+          end
+
+          # The second gate to checking out a connection. Make sure the number of
           # unavailable connections is less than the max pool size.
           until max_size == 0 || unavailable_connections < max_size
             wait = deadline - Utils.monotonic_time
@@ -1337,6 +1359,8 @@ module Mongo
           end
           @max_connecting_cv.signal
           @size_cv.signal
+          cleanup_fifo_queue
+          @fifo_cv.signal
         end
         @populate_semaphore.signal
         publish_cmap_event(
@@ -1355,6 +1379,17 @@ module Mongo
         @connection_requests -= 1
         @max_connecting_cv.signal
         @size_cv.signal
+        cleanup_fifo_queue
+        @fifo_cv.signal
+      end
+
+      # Wait if the thread is alive and it's not its turn or no connection is available
+      def fifo_ready?(thread_ref)
+        !thread_ref.weakref_alive? || @fifo_queue.peek == thread_ref
+      end
+
+      def cleanup_fifo_queue
+        @fifo_queue.delete_if { |ref| !ref.weakref_alive? }
       end
     end
   end
