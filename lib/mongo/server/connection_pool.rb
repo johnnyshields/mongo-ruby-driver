@@ -1265,17 +1265,20 @@ module Mongo
         deadline = Utils.monotonic_time + wait_timeout
         connection = nil
 
+        # The first gate to checking out a connection. Ensure that
+        # threads execute in FIFO order.
         @lock.synchronize do
-
-          # The first gate to checking out a connection. Ensure that
-          # threads execute in FIFO order.
           thread_ref = WeakRef.new(Thread.current)
           @fifo_queue.push(thread_ref)
-          until fifo_ready?(thread_ref)
+        end
+
+        @lock.synchronize do
+          until @fifo_queue.peek == thread_ref
             wait = deadline - Utils.monotonic_time
             raise_check_out_timeout!(connection_global_id) if wait <= 0
             @fifo_cv.wait(wait)
           end
+          @fifo_queue.pop
 
           # The second gate to checking out a connection. Make sure the number of
           # unavailable connections is less than the max pool size.
@@ -1302,6 +1305,11 @@ module Mongo
         end
 
         connection
+      ensure
+        @lock.synchronize do
+          cleanup_fifo_queue
+          @fifo_cv.signal
+        end
       end
 
       # Waits for a connection to become available, or raises is no connection
@@ -1379,13 +1387,6 @@ module Mongo
         @connection_requests -= 1
         @max_connecting_cv.signal
         @size_cv.signal
-        cleanup_fifo_queue
-        @fifo_cv.signal
-      end
-
-      # Wait if the thread is alive and it's not its turn or no connection is available
-      def fifo_ready?(thread_ref)
-        !thread_ref.weakref_alive? || @fifo_queue.peek == thread_ref
       end
 
       def cleanup_fifo_queue
