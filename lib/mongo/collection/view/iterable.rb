@@ -193,6 +193,8 @@ module Mongo
             Operation::Explain.new(spec)
           else
             Operation::Find.new(spec)
+
+            Operation::Null
           end
         end
 
