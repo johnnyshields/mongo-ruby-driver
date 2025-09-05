@@ -280,6 +280,8 @@ module Mongo
       # @option options [ true | false | nil ] :deserialize_as_bson Whether the
       #   query results should be deserialized to BSON types, or to Ruby
       #   types (where possible).
+      # @option options [ true | false | nil ] :output_parquet Whether the
+      #   query results should be output as Parquet bytes instead of Ruby objects.
       #
       # @return [ Operation::Result ] Result of the query.
       def send_initial_query(server, session, context, options = {})
@@ -287,6 +289,9 @@ module Mongo
         execution_opts = {}
         if opts.key?(:deserialize_as_bson)
           execution_opts[:deserialize_as_bson] = opts.delete(:deserialize_as_bson)
+        end
+        if opts.key?(:output_parquet)
+          execution_opts[:output_parquet] = opts.delete(:output_parquet)
         end
         if server.load_balancer?
           connection = server.pool.check_out(context: context)

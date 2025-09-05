@@ -4,6 +4,7 @@
 source 'https://rubygems.org'
 
 gemspec
+gem 'red-arrow'
 
 require_relative './gemfiles/standard'
 

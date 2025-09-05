@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require_relative 'bson_to_parquet_converter'
+
 module Mongo
   module Protocol
 
@@ -280,13 +282,20 @@ module Mongo
           # @option options [ Boolean ] :deserialize_as_bson Whether to perform
           #   section deserialization using BSON types instead of native Ruby types
           #   wherever possible.
+          # @option options [ Boolean ] :output_parquet Whether to output Parquet bytes
+          #   instead of Ruby objects.
           #
-          # @return [ Array<BSON::Document> ] Deserialized section.
+          # @return [ Array<BSON::Document> | String ] Deserialized section or Parquet bytes.
           #
           # @since 2.5.0
           def self.deserialize(buffer, options = {})
-            mode = options[:deserialize_as_bson] ? :bson : nil
-            BSON::Document.from_bson(buffer, **{ mode: mode })
+            if options[:output_parquet]
+              converter = BsonToParquetConverter.new
+              converter.convert_to_parquet(buffer, options)
+            else
+              mode = options[:deserialize_as_bson] ? :bson : nil
+              BSON::Document.from_bson(buffer, **{ mode: mode })
+            end
           end
         end
 
@@ -379,11 +388,18 @@ module Mongo
         # @option options [ Boolean ] :deserialize_as_bson Whether to perform
         #   section deserialization using BSON types instead of native Ruby types
         #   wherever possible.
+        # @option options [ Boolean ] :output_parquet Whether to output Parquet bytes
+        #   instead of Ruby objects.
         #
-        # @return [ Hash ] The decoded BSON document.
+        # @return [ Hash | String ] The decoded BSON document or Parquet bytes.
         def self.deserialize(buffer, options = {})
-          mode = options[:deserialize_as_bson] ? :bson : nil
-          BSON::Document.from_bson(buffer, **{ mode: mode })
+          if options[:output_parquet]
+            converter = BsonToParquetConverter.new
+            converter.convert_to_parquet(buffer, options)
+          else
+            mode = options[:deserialize_as_bson] ? :bson : nil
+            BSON::Document.from_bson(buffer, **{ mode: mode })
+          end
         end
 
         # Whether there can be a size limit on this type after serialization.

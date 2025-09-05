@@ -222,6 +222,7 @@ module Mongo
     #   executes this command. This is an internal option and is subject to
     #   change.
     #   - :deserialize_as_bson [ Boolean ] Whether to deserialize the response
+    #   - :output_parquet [ Boolean ] Whether to output Parquet bytes instead of Ruby objects
     #     to this command using BSON types intead of native Ruby types wherever
     #     possible.
     #
