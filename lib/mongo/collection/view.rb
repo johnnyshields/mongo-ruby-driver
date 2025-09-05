@@ -49,33 +49,7 @@ module Mongo
       include Immutable
       include Iterable
       
-      # DEBUG: Override send_initial_query to see which one is being called
-      def send_initial_query(*args)
-        puts "🔍 DEBUG: View#send_initial_query called with #{args.length} args"
-        puts "🔍 DEBUG: Args: #{args.inspect}"
-        super
-      end
       
-      # DEBUG: Override each to see if it's being called
-      def each(*args, &block)
-        puts "🔍 DEBUG: View#each called with #{args.length} args"
-        puts "🔍 DEBUG: View options: #{@options.inspect}"
-        puts "🔍 DEBUG: Block given: #{block_given?}"
-        
-        # Call super and intercept the results
-        if block_given?
-          super(*args) do |doc|
-            puts "🔍 DEBUG: View#each yielding document: #{doc.class}"
-            if @options && @options[:execution_options] && @options[:execution_options][:output_parquet]
-              puts "🎯 DEBUG: Should convert to Parquet here!"
-              # TODO: Convert doc to Parquet bytes
-            end
-            yield doc
-          end
-        else
-          super(*args, &block)
-        end
-      end
       include Readable
       include Explainable
       include Writable

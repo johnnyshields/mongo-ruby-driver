@@ -72,9 +72,6 @@ module Mongo
     #
     # @since 2.0.0
     def initialize(view, result, server, options = {})
-      puts "🔍 DEBUG: Cursor.initialize called"
-      puts "🔍 DEBUG: Cursor class: #{self.class}"
-      puts "🔍 DEBUG: View options: #{view.options.inspect}"
       
       unless result.is_a?(Operation::Result)
         raise ArgumentError, "Second argument must be a Mongo::Operation::Result: #{result.inspect}"
@@ -480,9 +477,6 @@ module Mongo
     end
 
     def process(result)
-      puts "🔍 DEBUG: Cursor#process called"
-      puts "🔍 DEBUG: View options: #{@view.options.inspect}"
-      puts "🔍 DEBUG: Result documents count: #{result.documents.length}"
       
       @remaining -= result.returned_count if limited?
       # #process is called for the first batch of results. In this case
@@ -503,15 +497,12 @@ module Mongo
 
       # Check if we should convert to Parquet instead of returning Ruby objects
       if @view.options && @view.options[:execution_options] && @view.options[:execution_options][:output_parquet]
-        puts "🎯 DEBUG: Converting documents to Parquet at cursor level!"
-        
         # Convert Ruby documents to Parquet bytes using our converter
         require_relative 'protocol/bson_to_parquet_converter'
         converter = Protocol::BsonToParquetConverter.new
         
         # Convert the documents array to a single Parquet byte string
         parquet_bytes = converter.convert_documents_to_parquet(result.documents.dup)
-        puts "🎉 DEBUG: Converted #{result.documents.length} documents to #{parquet_bytes.bytesize} Parquet bytes"
         
         # Return the Parquet bytes as a single "document" that will be yielded by the cursor
         [parquet_bytes.force_encoding(Encoding::ASCII_8BIT)]

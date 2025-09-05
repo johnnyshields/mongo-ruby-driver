@@ -66,15 +66,7 @@ def demonstrate_parquet_output
     
     # When output_parquet: true, the protocol deserializers should return
     # raw Parquet bytes instead of Ruby objects
-    puts "🔍 DEBUG: About to call collection.find with execution_options"
     view = collection.find({}, { execution_options: { output_parquet: true } })
-    puts "🔍 DEBUG: Created view: #{view.class}"
-    puts "🔍 DEBUG: View options: #{view.options.inspect}"
-    
-    puts "🔍 DEBUG: About to call view.each"
-    puts "🔍 DEBUG: View.method(:each) = #{view.method(:each)}"
-    puts "🔍 DEBUG: View.method(:each).source_location = #{view.method(:each).source_location}"
-    puts "🔍 DEBUG: Checking if QueryCache is enabled: #{Mongo::QueryCache.enabled?}"
     
     # Disable query cache to force fresh queries
     Mongo::QueryCache.clear

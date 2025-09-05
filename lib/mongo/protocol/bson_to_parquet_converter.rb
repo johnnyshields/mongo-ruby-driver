@@ -7,40 +7,6 @@ rescue LoadError => e
   raise LoadError, "red-arrow and red-parquet gems are required for Parquet output. Install with: gem install red-arrow red-parquet"
 end
 
-# DEBUG: Monkey patch BSON::Document to see how objects are created
-module BSON
-  class Document
-    class << self
-      # Only patch if methods exist
-      if method_defined?(:from_bson)
-        alias_method :original_from_bson, :from_bson
-        
-        def from_bson(buffer, **options)
-          puts "🔍 DEBUG: BSON::Document.from_bson called with options: #{options.inspect}"
-          puts "🔍 DEBUG: Buffer class: #{buffer.class}, size: #{buffer.respond_to?(:length) ? buffer.length : 'unknown'}"
-          
-          # Check if we should convert to Parquet instead
-          if options[:mode] == :parquet_output
-            puts "🎯 DEBUG: Converting to Parquet instead of Ruby object!"
-            converter = Mongo::Protocol::BsonToParquetConverter.new
-            return converter.convert_to_parquet(buffer, options)
-          end
-          
-          original_from_bson(buffer, **options)
-        end
-      end
-      
-      if method_defined?(:new)
-        alias_method :original_new, :new
-        
-        def new(*args, &block)
-          puts "🔍 DEBUG: BSON::Document.new called with #{args.length} args"
-          original_new(*args, &block)
-        end
-      end
-    end
-  end
-end
 
 module Mongo
   module Protocol
@@ -72,27 +38,18 @@ module Mongo
       # @param options [Hash] Options for conversion
       # @return [String] Parquet-encoded bytes
       def convert_to_parquet(buffer, options = {})
-        puts "🔍 DEBUG: BsonToParquetConverter.convert_to_parquet called"
-        puts "🔍 DEBUG: Buffer class: #{buffer.class}, size: #{buffer.respond_to?(:length) ? buffer.length : 'unknown'}"
-        
         # Parse the BSON document to Ruby objects first, then convert to Parquet
         # This is a compromise - we create Ruby objects temporarily but then convert to Parquet
         begin
-          # Reset buffer position to start
-          original_position = buffer.read_position if buffer.respond_to?(:read_position)
-          
           # Use BSON to deserialize the document
           document = BSON::Document.from_bson(buffer)
-          puts "🔍 DEBUG: Parsed BSON document: #{document.keys.join(', ')}"
           
           # Convert the single document to Parquet
           parquet_bytes = convert_documents_to_parquet([document])
-          puts "🎉 DEBUG: Generated real Parquet data: #{parquet_bytes.bytesize} bytes"
           
           return parquet_bytes
           
         rescue => e
-          puts "❌ DEBUG: Error in BSON parsing: #{e.message}"
           # Fallback to mock data if parsing fails
           mock_parquet_data = "PAR1ErrorFallback#{Time.now.to_f}PAR1"
           return mock_parquet_data.force_encoding(Encoding::ASCII_8BIT)
@@ -346,7 +303,6 @@ module Mongo
           output.write(buffer.data.to_s)
           
         rescue => e
-          puts "❌ DEBUG: Parquet write error: #{e.message}"
           # Fallback to simple format
           parquet_data = "PAR1" + table.to_s + "PAR1"
           output.write(parquet_data.force_encoding(Encoding::ASCII_8BIT))
