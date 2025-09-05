@@ -117,7 +117,8 @@ module Mongo
 
         end
 
-        def send_initial_query(server, context)
+        def send_initial_query(server, context, options = {})
+          puts "🔍 DEBUG: aggregation send_initial_query called with options: #{options.inspect}"
           if server.load_balancer?
             # Connection will be checked in when cursor is drained.
             connection = server.pool.check_out(context: context)

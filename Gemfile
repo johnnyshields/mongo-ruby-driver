@@ -4,7 +4,8 @@
 source 'https://rubygems.org'
 
 gemspec
-gem 'red-arrow'
+gem 'red-arrow', '~> 20.0'
+gem 'red-parquet'
 
 require_relative './gemfiles/standard'
 

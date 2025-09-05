@@ -219,6 +219,7 @@ module Mongo
         #
         # @since 2.5.0
         def self.deserialize(buffer, options = {})
+          puts "🔍 DEBUG: Sections.deserialize called with options: #{options.inspect}"
           end_length = (@flag_bits & Msg::FLAGS.index(:checksum_present)) == 1 ? 32 : 0
           sections = []
           until buffer.length == end_length
@@ -289,10 +290,48 @@ module Mongo
           #
           # @since 2.5.0
           def self.deserialize(buffer, options = {})
+            # DEBUG: Always show when PayloadZero deserialize is called
+            puts "🔍 DEBUG: PayloadZero.deserialize called with options: #{options.inspect}"
+            
+            # Only apply Parquet conversion to actual query result documents
+            # Protocol documents (like command responses) need to remain as BSON::Documents
             if options[:output_parquet]
-              converter = BsonToParquetConverter.new
-              converter.convert_to_parquet(buffer, options)
+              # Check if buffer has data before trying to peek
+              if buffer.length == 0
+                puts "🔍 DEBUG: Empty buffer, using normal BSON path"
+                mode = options[:deserialize_as_bson] ? :bson : nil
+                return BSON::Document.from_bson(buffer, **{ mode: mode })
+              end
+              
+              # Peek at the document to see if it contains cursor data
+              begin
+                buffer_copy = buffer.dup
+                temp_doc = BSON::Document.from_bson(buffer_copy)
+                has_cursor = temp_doc.key?('cursor') || temp_doc.key?(:cursor)
+                has_results = temp_doc.key?('firstBatch') || temp_doc.key?(:firstBatch) || 
+                             temp_doc.key?('nextBatch') || temp_doc.key?(:nextBatch)
+                
+                puts "🔍 DEBUG: Document keys: #{temp_doc.keys.inspect}"
+                puts "🔍 DEBUG: has_cursor: #{has_cursor}, has_results: #{has_results}"
+                
+                if has_cursor || has_results
+                  puts "🎯 DEBUG: PayloadZero calling BsonToParquetConverter for query results!"
+                  converter = BsonToParquetConverter.new
+                  result = converter.convert_to_parquet(buffer, options)
+                  puts "🎉 DEBUG: PayloadZero BsonToParquetConverter returned #{result.class}, #{result.bytesize} bytes"
+                  result
+                else
+                  puts "🔍 DEBUG: PayloadZero skipping conversion - protocol document, not query results"
+                  mode = options[:deserialize_as_bson] ? :bson : nil
+                  BSON::Document.from_bson(buffer, **{ mode: mode })
+                end
+              rescue => e
+                puts "🔍 DEBUG: Error peeking at buffer (#{e.message}), using normal BSON path"
+                mode = options[:deserialize_as_bson] ? :bson : nil
+                BSON::Document.from_bson(buffer, **{ mode: mode })
+              end
             else
+              puts "🔍 DEBUG: PayloadZero calling BSON::Document.from_bson (normal path)"
               mode = options[:deserialize_as_bson] ? :bson : nil
               BSON::Document.from_bson(buffer, **{ mode: mode })
             end
@@ -393,10 +432,17 @@ module Mongo
         #
         # @return [ Hash | String ] The decoded BSON document or Parquet bytes.
         def self.deserialize(buffer, options = {})
+          # DEBUG: Always show when deserialize is called
+          puts "🔍 DEBUG: Document.deserialize called with options: #{options.inspect}"
+          
           if options[:output_parquet]
+            puts "🎯 DEBUG: Calling BsonToParquetConverter!"
             converter = BsonToParquetConverter.new
-            converter.convert_to_parquet(buffer, options)
+            result = converter.convert_to_parquet(buffer, options)
+            puts "🎉 DEBUG: BsonToParquetConverter returned #{result.class}, #{result.bytesize} bytes"
+            result
           else
+            puts "🔍 DEBUG: Calling BSON::Document.from_bson (normal path)"
             mode = options[:deserialize_as_bson] ? :bson : nil
             BSON::Document.from_bson(buffer, **{ mode: mode })
           end

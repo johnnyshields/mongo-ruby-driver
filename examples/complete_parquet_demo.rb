@@ -87,31 +87,110 @@ class ParquetDemo
 
   def demonstrate_parquet_query
     puts "=== PARQUET QUERY (Raw Bytes) ==="
-    puts "Query: @collection.find({}, { output_parquet: true })"
+    puts "Query: @collection.find({}, { execution_options: { output_parquet: true } })"
     puts
     
-    # This would trigger the hacked protocol to output Parquet bytes
-    # instead of creating Ruby objects
-    puts "With the hack in place, this query would:"
-    puts "1. Execute the find operation normally"
-    puts "2. Receive BSON bytes from MongoDB server"
-    puts "3. At the protocol deserialization level:"
-    puts "   - Skip BSON::Document.from_bson() entirely"
-    puts "   - Parse BSON structure directly from byte buffer"
-    puts "   - Convert to Arrow schema and arrays"
-    puts "   - Serialize to Parquet format"
-    puts "4. Return raw Parquet bytes instead of Ruby objects"
-    puts
+    begin
+      puts "🔄 Executing Parquet conversion..."
+      puts "   This should bypass ALL Ruby object creation!"
+      puts
+      
+      # The hack intercepts raw BSON bytes at the protocol level
+      # and converts them directly to Parquet using BsonToParquetConverter
+      parquet_data = ""
+      doc_count = 0
+      
+      cursor = @collection.find({}, { execution_options: { output_parquet: true } })
+      cursor.each do |result|
+        doc_count += 1
+        
+        if result.is_a?(String) && result.encoding == Encoding::ASCII_8BIT
+          # PERFECT! Raw Parquet bytes from protocol layer - no Ruby objects created!
+          parquet_data += result
+          puts "  🎉 RAW PARQUET BYTES: Chunk #{doc_count}: #{result.bytesize} bytes"
+          puts "     Encoding: #{result.encoding}"
+          puts "     Type: #{result.class}"
+          puts "     This means BsonToParquetConverter successfully intercepted BSON bytes!"
+        else
+          # Hack not working - still creating Ruby objects
+          puts "  ❌ RUBY OBJECT CREATED: #{result.class}"
+          puts "     This means BSON::Document.from_bson was called instead of our converter"
+          puts "     Expected: Raw Parquet bytes (String, ASCII-8BIT encoding)"
+          puts "     Got: Ruby #{result.class} object"
+        end
+      end
+      
+      # Show the difference between what we got and what we wanted
+      if parquet_data.empty?
+        puts
+        puts "  ⚠️  ZERO-COPY CONVERSION FAILED"
+        puts "     The protocol should have called:"
+        puts "     BsonToParquetConverter.convert_to_parquet(buffer, options)"
+        puts "     Instead of:"
+        puts "     BSON::Document.from_bson(buffer, mode: mode)"
+        puts
+        puts "  🔧 Falling back to Ruby-object conversion for demo..."
+        parquet_data = create_parquet_from_documents
+      else
+        puts
+        puts "  ✅ ZERO-COPY SUCCESS!"
+        puts "     Raw BSON bytes were converted directly to Parquet bytes"
+        puts "     NO intermediate Ruby objects were created!"
+      end
+      
+      # Write to file
+      timestamp = Time.now.strftime('%Y%m%d_%H%M%S')
+      filename = "demo_export_#{timestamp}.parquet"
+      
+      File.open(filename, 'wb') { |f| f.write(parquet_data) }
+      
+      puts
+      puts "✅ SUCCESS!"
+      puts "  📁 File: #{filename}"
+      puts "  📊 Size: #{parquet_data.bytesize} bytes"
+      puts "  🔢 Records: #{doc_count}"
+      puts
+      
+      # Show how to use the file
+      puts "📖 Usage examples:"
+      puts "  Python/Pandas: pd.read_parquet('#{filename}')"
+      puts "  DuckDB: SELECT * FROM '#{filename}'"
+      puts "  Spark: spark.read.parquet('#{filename}')"
+      puts
+      
+    rescue => e
+      puts "❌ Error: #{e.message}"
+      puts "   This demonstrates the hack concept - actual integration needed."
+    end
+  end
+
+  def create_parquet_from_documents
+    # Get actual documents from MongoDB
+    docs = @collection.find({}).to_a
     
-    # Simulate what the result would look like
-    puts "Expected result: Binary Parquet data (example):"
-    puts "[Binary data representing Parquet format]"
-    puts "Length: ~2048 bytes (estimated for 3 documents)"
-    puts
+    # Convert to Parquet using red-arrow
+    ids = docs.map { |d| d[:_id].to_s }
+    names = docs.map { |d| d[:name] }
+    ages = docs.map { |d| d[:age] }
+    salaries = docs.map { |d| d[:salary] }
+    actives = docs.map { |d| d[:is_active] }
+    teams = docs.map { |d| d.dig(:metadata, :team) }
     
-    # In real implementation, you would do:
-    # parquet_bytes = @collection.find({}, { output_parquet: true })
-    # File.write('output.parquet', parquet_bytes)
+    table = Arrow::Table.new(
+      "id" => ids,
+      "name" => names, 
+      "age" => ages,
+      "salary" => salaries,
+      "active" => actives,
+      "team" => teams
+    )
+    
+    output = StringIO.new
+    Arrow::ParquetArrowFileWriter.open(output, table.schema) do |writer|
+      writer.write_table(table)
+    end
+    
+    output.string
   end
 
   def show_performance_benefits

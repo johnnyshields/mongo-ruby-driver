@@ -41,7 +41,10 @@ module Mongo
         #
         # @yieldparam [ Hash ] Each matching document.
         def each
+          puts "🔍 DEBUG: Iterable#each called, about to create cursor"
+          puts "🔍 DEBUG: prefer_cached_cursor? = #{prefer_cached_cursor?}"
           @cursor = prefer_cached_cursor? ? cached_cursor : new_cursor_for_iteration
+          puts "🔍 DEBUG: Created cursor: #{@cursor.class}"
           return @cursor.to_enum unless block_given?
 
           limit_for_cached_query = compute_limit_for_cached_query
@@ -91,7 +94,7 @@ module Mongo
 
           if respond_to?(:write?, true) && write?
             server = server_selector.select_server(cluster, nil, session, write_aggregation: true)
-            result = send_initial_query(server, context)
+            result = send_initial_query(server, context, view.options[:execution_options] || {})
 
             if use_query_cache?
               CachingCursor.new(view, result, server, session: session, context: context)
@@ -100,7 +103,7 @@ module Mongo
             end
           else
             read_with_retry_cursor(session, server_selector, view, context: context) do |server|
-              send_initial_query(server, context)
+              send_initial_query(server, context, view.options[:execution_options] || {})
             end
           end
         end
@@ -167,14 +170,29 @@ module Mongo
           end
         end
 
-        def send_initial_query(server, context)
+        def send_initial_query(server, context, options = {})
+          puts "🔍 DEBUG: send_initial_query called with options: #{options.inspect}"
+          
           operation = initial_query_op(context.session)
+          
+          # Extract execution options for protocol deserializers
+          execution_opts = {}
+          if options.key?(:deserialize_as_bson)
+            execution_opts[:deserialize_as_bson] = options[:deserialize_as_bson]
+          end
+          if options.key?(:output_parquet)
+            execution_opts[:output_parquet] = options[:output_parquet]
+            puts "🎯 DEBUG: Found output_parquet option, passing to operation.execute"
+          end
+          
+          puts "🔍 DEBUG: execution_opts being passed: #{execution_opts.inspect}"
+          
           if server.load_balancer?
             # Connection will be checked in when cursor is drained.
             connection = server.pool.check_out(context: context)
-            operation.execute_with_connection(connection, context: context)
+            operation.execute_with_connection(connection, context: context, options: execution_opts)
           else
-            operation.execute(server, context: context)
+            operation.execute(server, context: context, options: execution_opts)
           end
         end
 

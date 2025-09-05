@@ -240,6 +240,7 @@ module Mongo
         expected_response_to = nil,
         options = {}
       )
+        puts "🔍 DEBUG: Protocol::Message.deserialize called with options: #{options.inspect}"
         # io is usually a Mongo::Socket instance, which supports the
         # timeout option. For compatibility with whoever might call this
         # method with some other IO-like object, pass options only when they

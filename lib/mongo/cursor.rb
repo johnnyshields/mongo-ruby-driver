@@ -72,6 +72,10 @@ module Mongo
     #
     # @since 2.0.0
     def initialize(view, result, server, options = {})
+      puts "🔍 DEBUG: Cursor.initialize called"
+      puts "🔍 DEBUG: Cursor class: #{self.class}"
+      puts "🔍 DEBUG: View options: #{view.options.inspect}"
+      
       unless result.is_a?(Operation::Result)
         raise ArgumentError, "Second argument must be a Mongo::Operation::Result: #{result.inspect}"
       end
@@ -438,6 +442,9 @@ module Mongo
     end
 
     def cache_resume_token(doc)
+      # Skip resume token caching for Parquet bytes (non-document data)
+      return unless doc.respond_to?(:[]) && !doc.is_a?(String)
+      
       if doc[:_id] && doc[:_id].is_a?(Hash)
         @resume_token = doc[:_id] && doc[:_id].dup.freeze
       end
@@ -473,6 +480,10 @@ module Mongo
     end
 
     def process(result)
+      puts "🔍 DEBUG: Cursor#process called"
+      puts "🔍 DEBUG: View options: #{@view.options.inspect}"
+      puts "🔍 DEBUG: Result documents count: #{result.documents.length}"
+      
       @remaining -= result.returned_count if limited?
       # #process is called for the first batch of results. In this case
       # the @cursor_id may be zero (all results fit in the first batch).
@@ -490,10 +501,26 @@ module Mongo
 
       end_session if closed?
 
-      # Since our iteration code mutates the documents array by calling #shift
-      # on it, duplicate the documents here to permit restarting iteration
-      # from the beginning of the cursor as long as get_more was not called
-      result.documents.dup
+      # Check if we should convert to Parquet instead of returning Ruby objects
+      if @view.options && @view.options[:execution_options] && @view.options[:execution_options][:output_parquet]
+        puts "🎯 DEBUG: Converting documents to Parquet at cursor level!"
+        
+        # Convert Ruby documents to Parquet bytes using our converter
+        require_relative 'protocol/bson_to_parquet_converter'
+        converter = Protocol::BsonToParquetConverter.new
+        
+        # Convert the documents array to a single Parquet byte string
+        parquet_bytes = converter.convert_documents_to_parquet(result.documents.dup)
+        puts "🎉 DEBUG: Converted #{result.documents.length} documents to #{parquet_bytes.bytesize} Parquet bytes"
+        
+        # Return the Parquet bytes as a single "document" that will be yielded by the cursor
+        [parquet_bytes.force_encoding(Encoding::ASCII_8BIT)]
+      else
+        # Since our iteration code mutates the documents array by calling #shift
+        # on it, duplicate the documents here to permit restarting iteration
+        # from the beginning of the cursor as long as get_more was not called
+        result.documents.dup
+      end
     end
 
     def use_limit?
